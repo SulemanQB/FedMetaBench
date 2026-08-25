@@ -1,0 +1,14 @@
+n_clients: 4
+n_classes: 4
+n_rounds: 5
+noise_max: 0.3
+seeds: [42]
+inner_steps: 2
+inner_lr: 0.01
+outer_lr: 0.001
+local_epochs: 2
+hidden_size: 32
+n_per_class: 40
+dataset: gaussian
+device: cpu
+output_dir: ./results

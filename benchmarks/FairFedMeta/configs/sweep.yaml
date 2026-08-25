@@ -1,0 +1,19 @@
+# FairFedMeta Ablation Sweep
+# Compares FairFedMeta against baselines across fairness penalty strengths
+
+sweep:
+  seeds: [42, 123, 456]
+
+  algorithms:
+    - name: "fedavg"
+    - name: "per_fedavg"
+    - name: "fair_fedavg"
+    - name: "agnostic_fair"
+      lambda_fair: [0.1, 0.5, 0.9]
+    - name: "fair_fedmaml"
+      fairness_penalty: [0.0, 0.1, 0.5, 1.0, 2.0, 5.0]
+      lambda_lr: [0.001, 0.01, 0.1]
+
+  dataset:
+    n_hospitals: [10, 20, 50]
+    k_shot: [5, 10, 20]

@@ -1,0 +1,38 @@
+experiment:
+  name: "fedmeta_temporal_smoke"
+  seed: 42
+  device: "cpu"
+
+dataset:
+  n_clients: 6
+  n_samples_per_client: 400
+  n_features: 16
+  n_classes: 2
+  drift_type: "sudden"
+  n_drifts: 2
+
+model:
+  type: "simple"
+  input_dim: 16
+  hidden_dim: 32
+  n_classes: 2
+  n_layers: 1
+  dropout: 0.1
+
+algorithm:
+  name: "temporal_maml"
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 2
+  temporal_decay: 0.9
+  ewc_lambda: 0.5
+  clients_per_round: 3
+
+training:
+  n_rounds: 3
+  n_tasks_per_client: 2
+  k_shot: 10
+  eval_every: 1
+
+output:
+  results_dir: "./results"

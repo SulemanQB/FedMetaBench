@@ -1,0 +1,32 @@
+# FedNoisyMAML: Federated Meta-Learning Under Heterogeneous Label Noise
+
+# Federation
+n_clients: 10
+n_classes: 6
+
+# Training
+n_rounds: 150
+noise_max: 0.5          # maximum label noise rate (linearly distributed)
+n_per_class: 120        # samples per class in global dataset
+
+# Seeds for reproducibility
+seeds: [42, 123, 456, 789, 1024, 2048, 3072, 4096, 5120, 6144]
+
+# MAML Hyperparameters
+inner_steps: 3
+inner_lr: 0.01
+outer_lr: 0.001
+hidden_size: 64
+
+# FedAvg Hyperparameters
+local_epochs: 3
+
+# Device: cpu or cuda
+device: cuda
+
+# Dataset: gaussian, cifar10, mnist
+dataset: gaussian
+dirichlet_alpha: 0.5     # non-IID degree for image datasets (lower = more heterogeneous)
+
+# Output
+output_dir: ./results

@@ -1,0 +1,44 @@
+# FairFedMeta Default Configuration
+# eICU mortality prediction with fairness-constrained federated meta-learning
+
+experiment:
+  name: "fairfedmeta_eicu_default"
+  seed: 42
+  device: "auto"  # auto, cpu, cuda
+
+dataset:
+  name: "eicu"
+  data_path: null  # null = synthetic data
+  n_samples: 5000
+  n_hospitals: 20
+  seq_len: 48
+  n_features: 15
+  n_groups: 5
+  k_shot: 10
+  meta_train_ratio: 0.7
+
+model:
+  type: "lstm"  # lstm or gru
+  input_dim: 15
+  hidden_dim: 64
+  n_layers: 2
+  n_classes: 2
+  dropout: 0.3
+
+algorithm:
+  name: "fair_fedmaml"  # fair_fedmaml, fedavg, per_fedavg, fair_fedavg, agnostic_fair
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 3
+  fairness_penalty: 1.0
+  lambda_lr: 0.01
+  clients_per_round: 5
+
+training:
+  n_rounds: 50
+  eval_every: 5
+  save_every: 10
+
+output:
+  results_dir: "./results"
+  save_model: true

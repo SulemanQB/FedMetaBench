@@ -1,0 +1,16 @@
+# FedMeta-Temporal+ Drift Ablation Sweep
+
+sweep:
+  seeds: [42, 123, 456]
+
+  drift_types: ["sudden", "gradual", "recurring", "incremental"]
+
+  algorithms:
+    - name: "temporal_fedavg"
+      temporal_decay: [0.8, 0.9, 0.95, 0.99]
+    - name: "ewc_maml"
+      ewc_lambda: [0.0, 0.1, 0.5, 1.0, 5.0]
+    - name: "temporal_maml"  # ablation: no EWC, no temporal weighting
+    - name: "fedavg"  # standard baseline
+
+  n_drifts: [1, 3, 5, 10]

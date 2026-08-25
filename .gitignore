@@ -1,0 +1,26 @@
+results/
+**/results/*.json
+**/results/*.txt
+**/results/*error*
+!**/results/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.DS_Store
+data/
+!benchmarks/FedMetaEnv/data/.gitkeep
+*.pt
+*.pth
+runs/
+.ipynb_checkpoints/
+
+# Ad-hoc console dumps / crash logs (never commit)
+results.txt
+results_fixed.txt
+*_error.txt
+**/results/*.log
+**/results/live_*.log
+**/results/fullrun_*.log
+**/results/*_error.txt

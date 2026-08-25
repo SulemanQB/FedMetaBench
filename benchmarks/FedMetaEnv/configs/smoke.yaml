@@ -1,0 +1,38 @@
+experiment:
+  name: "fedmetaenv_smoke"
+  seed: 42
+  device: "cpu"
+
+dataset:
+  name: "beijing"
+  data_dir: "./data"
+  target_pollutant: "PM2.5"
+  window_size: 12
+  k_days: 3
+
+model:
+  type: "lstm"
+  input_dim: 17
+  hidden_dim: 32
+  n_layers: 1
+  dropout: 0.1
+
+algorithm:
+  name: "fedavg"
+  inner_lr: 0.01
+  outer_lr: 0.001
+  inner_steps: 2
+  clients_per_round: 3
+  local_meta_steps: 1
+
+training:
+  n_rounds: 2
+  eval_every: 1
+
+evaluation:
+  k_days_list: [3]
+  loso: true
+  max_loso_stations: 2  # smoke: only first 2 stations
+
+output:
+  results_dir: "./results"
