@@ -1,24 +1,12 @@
-"""Temporal datasets with concept drift for FedMeta-Temporal+.
-
-Supports:
-1. Synthetic drifting streams (gradual/sudden/recurring drift)
-2. Electricity pricing dataset (natural temporal drift)
-3. Rotating MNIST (visual concept drift)
-
-Each client receives a temporally-ordered stream with potentially
-different drift patterns (temporal heterogeneity).
-"""
+"""Synthetic temporal streams with configurable concept drift."""
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-
-logger = logging.getLogger(__name__)
 
 
 class TemporalStreamDataset(Dataset):
@@ -65,6 +53,14 @@ class DriftingStreamGenerator:
         n_drifts: int = 3,
         seed: int = 42,
     ) -> dict[str, Any]:
+        if n_classes < 2:
+            raise ValueError("n_classes must be at least 2")
+        if n_drifts < 1:
+            raise ValueError("n_drifts must be at least 1")
+        if drift_type not in self.DRIFT_TYPES:
+            raise ValueError(
+                f"Unknown drift_type: {drift_type}. Expected one of {self.DRIFT_TYPES}"
+            )
         rng = np.random.RandomState(seed)
 
         client_data = {}
@@ -145,11 +141,16 @@ class DriftingStreamGenerator:
                 w = (1 - alpha) * concepts[idx] + alpha * concepts[idx + 1]
 
             score = features[i] @ w
-            prob = 1 / (1 + np.exp(-score * 3))
-            labels[i] = int(rng.rand() < prob)
-
-            if n_classes > 2:
-                labels[i] = labels[i] % n_classes
+            if n_classes == 2:
+                prob = 1 / (1 + np.exp(-score * 3))
+                labels[i] = int(rng.rand() < prob)
+            else:
+                class_centers = np.linspace(-2.0, 2.0, n_classes)
+                class_logits = -((score - class_centers) ** 2)
+                class_logits -= class_logits.max()
+                class_probs = np.exp(class_logits)
+                class_probs /= class_probs.sum()
+                labels[i] = rng.choice(n_classes, p=class_probs)
 
         return features, labels, timestamps
 
@@ -260,6 +261,10 @@ class FederatedTemporalDataset:
         self, test_frac: float = 0.2, seed: int = 42,
     ) -> tuple[list[int], list[int]]:
         """Split clients into train/test."""
+        if self.n_clients < 2:
+            raise ValueError("At least two clients are required for train/test evaluation")
+        if not 0 < test_frac < 1:
+            raise ValueError("test_frac must be between 0 and 1")
         rng = np.random.RandomState(seed)
         perm = rng.permutation(self.n_clients)
         n_test = max(1, int(self.n_clients * test_frac))

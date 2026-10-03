@@ -1,4 +1,4 @@
-torch>=2.0.0
+-r ../../requirements.txt
+
+# Optional image-dataset extension; not required by the synthetic smoke run.
 torchvision>=0.15.0
-numpy>=1.24.0
-pyyaml>=6.0

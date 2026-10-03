@@ -1,4 +1,4 @@
-# FedMeta-Temporal+ Default Configuration
+# FedMetaTemporal default configuration
 
 experiment:
   name: "fedmeta_temporal_default"
@@ -14,7 +14,7 @@ dataset:
   n_drifts: 3
 
 model:
-  type: "neural_cde"  # neural_cde, simple
+  type: "simple"  # simple for the generated tabular tasks; neural_cde expects sequences
   input_dim: 20
   hidden_dim: 64
   n_classes: 2

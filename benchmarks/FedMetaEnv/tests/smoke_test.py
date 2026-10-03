@@ -1,4 +1,4 @@
-"""Smoke test for FedMeta-Env."""
+"""Smoke test for FedMetaEnv."""
 
 from __future__ import annotations
 
@@ -56,6 +56,7 @@ def test_env_maml():
 
     model = EnvLSTM(input_dim=17, hidden_dim=16, n_layers=1)
     maml = EnvMAML(model, inner_lr=0.01, outer_lr=0.001, inner_steps=1)
+    before = [parameter.detach().clone() for parameter in model.parameters()]
 
     task = {
         "support_x": torch.randn(20, 24, 17),
@@ -65,6 +66,7 @@ def test_env_maml():
     }
     metrics = maml.meta_train_step([task])
     assert "meta_loss" in metrics
+    assert any(not torch.equal(old, new) for old, new in zip(before, model.parameters()))
     print("   PASSED")
 
 
@@ -115,7 +117,7 @@ def test_metrics():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("FedMeta-Env Smoke Test")
+    print("FedMetaEnv Smoke Test")
     print("=" * 50)
     test_dataset()
     test_model()

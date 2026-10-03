@@ -1,8 +1,6 @@
-"""Air quality datasets for FedMeta-Env.
+"""Air quality datasets for FedMetaEnv.
 
-Supports:
-1. Beijing Multi-Site Air Quality (12 stations, UCI)
-2. OpenAQ cross-city data (synthetic placeholder)
+Supports Beijing Multi-Site Air Quality data and a synthetic station fallback.
 
 Each station = federated client. Natural spatial heterogeneity.
 Task: predict PM2.5 / AQI from meteorological + pollutant features.
@@ -12,6 +10,7 @@ Few-shot = K days of data for adaptation at a new/cold-start station.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -67,8 +66,8 @@ class AirQualityDataset(Dataset):
 class BeijingAirQualityLoader:
     """Load Beijing Multi-Site Air Quality dataset.
 
-    If real data not available, generates realistic synthetic data
-    with spatial heterogeneity across 12 stations.
+    If real data is not available, generates synthetic data with spatial
+    heterogeneity across 12 stations.
     """
 
     def load(
@@ -82,9 +81,10 @@ class BeijingAirQualityLoader:
             Path(data_dir) / "beijing_air_quality",
             Path(data_dir) / "PRSA_Data_20130301-20170228",
             Path(data_dir),
-            Path(__file__).resolve().parents[4] / "FedSense" / "data" / "PRSA_Data_20130301-20170228",
-            Path("/shared/homes/24659892/Projects/FedSense/data/PRSA_Data_20130301-20170228"),
         ]
+        external_data_dir = os.environ.get("FEDMETAENV_DATA_DIR")
+        if external_data_dir:
+            candidates.append(Path(external_data_dir))
         data_path = None
         for cand in candidates:
             sample = cand / f"PRSA_Data_{BEIJING_STATIONS[0]}_20130301-20170228.csv"
@@ -127,7 +127,8 @@ class BeijingAirQualityLoader:
         return {
             "station_data": station_data,
             "n_stations": len(station_data),
-            "n_features": station_data[0]["features"].shape[1] if station_data else 17,
+            "n_features": next(iter(station_data.values()))["features"].shape[1]
+            if station_data else 17,
             "target_pollutant": target,
             "window_size": window_size,
             "synthetic": False,
@@ -230,12 +231,13 @@ class FederatedAirQuality:
     Each station is a client. Supports:
     - Leave-One-Station-Out (LOSO) for generalization
     - K-shot adaptation (K days = K*24 hours of data)
-    - Cross-pollutant meta-transfer evaluation
     """
 
     def __init__(self, data_info: dict[str, Any], window_size: int = 24):
         self.station_data = data_info["station_data"]
         self.n_stations = data_info["n_stations"]
+        if self.n_stations < 2:
+            raise ValueError("At least two stations are required for LOSO evaluation")
         self.n_features = data_info["n_features"]
         self.window_size = window_size
         self.station_ids = sorted(self.station_data.keys())
@@ -263,7 +265,6 @@ class FederatedAirQuality:
 
         K days = K * 24 hourly data points for few-shot adaptation.
         """
-        rng = np.random.RandomState(seed)
         d = self.station_data[station_id]
         features = d["features"]
         targets = d["targets"]
@@ -274,7 +275,8 @@ class FederatedAirQuality:
 
         # Use first k_samples as support (temporal order matters)
         support_indices = np.arange(k_samples)
-        query_indices = np.arange(k_samples, n)
+        query_start = k_samples + self.window_size - 1
+        query_indices = np.arange(query_start, n)
 
         def make_windows(indices):
             xs, ys = [], []

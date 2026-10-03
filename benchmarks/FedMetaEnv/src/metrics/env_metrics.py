@@ -1,4 +1,4 @@
-"""Environmental monitoring metrics for FedMeta-Env.
+"""Environmental monitoring metrics for FedMetaEnv.
 
 Regression metrics + station-level generalization analysis.
 """

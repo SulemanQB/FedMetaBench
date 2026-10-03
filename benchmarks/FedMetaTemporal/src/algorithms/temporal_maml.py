@@ -1,34 +1,25 @@
-"""FedMeta-Temporal+ core algorithms.
-
-Paper 4a: TemporalMAML — MAML + Neural CDE + drift-triggered re-adaptation
-Paper 4b: EWC-MAML — EWC regularization to prevent catastrophic forgetting
-
-Also: Temporal-weighted FedAvg that favors recent client updates.
-"""
+"""Temporal MAML, EWC-MAML, and time-weighted FedAvg algorithms."""
 
 from __future__ import annotations
 
 import copy
-import logging
-from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.func import functional_call
 
 from .drift_detection import PageHinkleyDetector, ClientDriftMonitor
-
-logger = logging.getLogger(__name__)
 
 
 class TemporalMAML:
     """MAML aware of temporal concept drift.
 
     Key features:
-    - Drift detection triggers re-initialization of meta-learner
+    - Drift monitoring records changes in task loss
     - Recent tasks weighted more heavily in outer loop
-    - Compatible with Neural CDE encoder for irregular time series
+    - Compatible with the repository's time-aware sequence encoder
     """
 
     def __init__(
@@ -74,6 +65,34 @@ class TemporalMAML:
 
         return adapted
 
+    def _adapted_parameters(
+        self,
+        support_x: torch.Tensor,
+        support_y: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
+        """Return differentiable adapted parameters for the outer loop."""
+        params = dict(self.model.named_parameters())
+        buffers = dict(self.model.named_buffers())
+        state = {**params, **buffers}
+
+        for _ in range(self.inner_steps):
+            out = functional_call(self.model, state, (support_x,))
+            loss = F.cross_entropy(out, support_y)
+            grads = torch.autograd.grad(
+                loss,
+                tuple(params.values()),
+                create_graph=True,
+                allow_unused=True,
+            )
+            params = {
+                name: param - self.inner_lr * grad
+                if grad is not None else param
+                for (name, param), grad in zip(params.items(), grads)
+            }
+            state = {**params, **buffers}
+
+        return state
+
     def meta_train_step(
         self,
         tasks: list[dict[str, torch.Tensor]],
@@ -92,8 +111,10 @@ class TemporalMAML:
             qx = task["query_x"].to(self.device)
             qy = task["query_y"].to(self.device)
 
-            adapted = self.inner_loop(sx, sy)
-            query_loss = F.cross_entropy(adapted(qx), qy)
+            adapted_state = self._adapted_parameters(sx, sy)
+            query_loss = F.cross_entropy(
+                functional_call(self.model, adapted_state, (qx,)), qy
+            )
 
             # Temporal weighting: more recent tasks get higher weight
             time_weight = self.temporal_decay ** (len(tasks) - 1 - i)
@@ -229,6 +250,34 @@ class EWCMAML:
     def init_drift_monitor(self, n_clients: int):
         self.drift_monitor = ClientDriftMonitor(n_clients)
 
+    def _adapted_parameters(
+        self,
+        support_x: torch.Tensor,
+        support_y: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
+        """Return differentiable adapted parameters for the outer loop."""
+        params = dict(self.model.named_parameters())
+        buffers = dict(self.model.named_buffers())
+        state = {**params, **buffers}
+
+        for _ in range(self.inner_steps):
+            out = functional_call(self.model, state, (support_x,))
+            loss = F.cross_entropy(out, support_y)
+            grads = torch.autograd.grad(
+                loss,
+                tuple(params.values()),
+                create_graph=True,
+                allow_unused=True,
+            )
+            params = {
+                name: param - self.inner_lr * grad
+                if grad is not None else param
+                for (name, param), grad in zip(params.items(), grads)
+            }
+            state = {**params, **buffers}
+
+        return state
+
     def compute_fisher(self, tasks: list[dict[str, torch.Tensor]]):
         """Compute Fisher Information Matrix from current tasks."""
         self.model.train()
@@ -280,17 +329,10 @@ class EWCMAML:
             qx = task["query_x"].to(self.device)
             qy = task["query_y"].to(self.device)
 
-            # Inner loop
-            adapted = copy.deepcopy(self.model)
-            adapted.train()
-            for _ in range(self.inner_steps):
-                out = adapted(sx)
-                loss = F.cross_entropy(out, sy)
-                grads = torch.autograd.grad(loss, adapted.parameters(), create_graph=True)
-                for p, g in zip(adapted.parameters(), grads):
-                    p.data = p.data - self.inner_lr * g
-
-            query_loss = F.cross_entropy(adapted(qx), qy)
+            adapted_state = self._adapted_parameters(sx, sy)
+            query_loss = F.cross_entropy(
+                functional_call(self.model, adapted_state, (qx,)), qy
+            )
             total_loss += query_loss
 
         avg_loss = total_loss / len(tasks)
@@ -372,7 +414,6 @@ class TemporalFedAvg:
         outer_lr: float = 0.001,
         inner_steps: int = 3,
         temporal_decay: float = 0.9,
-        ewc_lambda: float = 0.5,
         clients_per_round: int = 5,
         device: str = "cpu",
     ):
@@ -381,7 +422,6 @@ class TemporalFedAvg:
         self.outer_lr = outer_lr
         self.inner_steps = inner_steps
         self.temporal_decay = temporal_decay
-        self.ewc_lambda = ewc_lambda
         self.clients_per_round = clients_per_round
         self.device = device
 
@@ -408,6 +448,7 @@ class TemporalFedAvg:
         client_models = []
         client_losses = []
         drifts = []
+        staleness_values = []
 
         for cid in selected:
             local_model = copy.deepcopy(self.global_model)
@@ -424,6 +465,9 @@ class TemporalFedAvg:
             client_models.append(local_maml.model)
             client_losses.append(metrics["meta_loss"])
             drifts.append(metrics["drift_detected"])
+            staleness_values.append(
+                self.round - self.client_timestamps.get(cid, self.round)
+            )
             self.client_timestamps[cid] = self.round
 
             if self.drift_monitor:
@@ -431,8 +475,7 @@ class TemporalFedAvg:
 
         # Temporal-weighted aggregation
         weights = []
-        for cid in selected:
-            staleness = self.round - self.client_timestamps.get(cid, 0)
+        for staleness in staleness_values:
             weights.append(self.temporal_decay ** staleness)
         total_w = sum(weights)
         weights = [w / total_w for w in weights]

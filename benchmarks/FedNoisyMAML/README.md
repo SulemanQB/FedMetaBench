@@ -1,46 +1,38 @@
-# FedNoisyMAML: Federated Meta-Learning Under Heterogeneous Label Noise
+# FedNoisyMAML
 
-Part of **[FedMetaBench](../../README.md)** — GitHub-ready federated meta-learning demos.
+FedNoisyMAML tests whether client-specific adaptation is useful when federated clients have different label-noise rates. It compares FedMAML with FedAvg on a synthetic classification task and optionally on MNIST or CIFAR-10.
 
-## Overview
+## Workflow
 
-This project studies whether **MAML-based personalization provides robustness** to heterogeneous label noise in federated learning. Each client has a different label noise rate (0% to 50%), and we compare FedMAML against FedAvg.
+The runner creates clean synthetic data, partitions it across clients, injects client-specific training-label noise, trains both methods, and evaluates each client on clean held-out data. The noise rate increases linearly from zero to `noise_max` across clients.
 
-**Key finding** (synthetic Gaussian mixture, 10 seeds): FedMAML consistently outperforms FedAvg (**p=0.002**) across noise levels.
+| Item | Default |
+| --- | --- |
+| Model | MLP for Gaussian data; CNN for images |
+| Algorithms | FedMAML and FedAvg |
+| Metric | Per-client and overall accuracy |
+| Reproducibility | YAML seeds, NumPy and PyTorch seeding |
 
-## Method
-
-- **FedMAML**: Inner-loop adaptation on noisy support data, meta-gradient aggregation across clients
-- **FedAvg** (baseline): Standard federated averaging with local SGD on noisy labels
-- **Data**: Synthetic 2D Gaussian mixture (default); optional MNIST/CIFAR via `dataset` config
-- **Noise model**: Heterogeneous — client i gets noise rate = i/(n−1) × noise_max
-- **Evaluation**: Per-client accuracy on clean held-out test data after adaptation
-
-## Quick Start
+## Run
 
 ```bash
-pip install -r requirements.txt
-
-# Full multi-seed experiment
-python run_experiment.py --config configs/default.yaml
-
-# Fast smoke (CPU)
+python -m pip install -r ../../requirements.txt
 python run_experiment.py --config configs/smoke.yaml
-
 python tests/smoke_test.py
 ```
 
-## Project Structure
+Use `configs/default.yaml` for the longer ten-seed Gaussian experiment. Select `dataset: mnist` or `dataset: cifar10` only after installing the optional image dependencies in `requirements.txt` and setting `DATA_ROOT` if a custom dataset directory is needed.
 
-```
-├── run_experiment.py
-├── configs/{default,smoke}.yaml
-├── src/{algorithms,datasets,models,image_data}.py
-├── tests/smoke_test.py
-└── requirements.txt
-```
+## Configuration and Output
+
+`n_clients`, `noise_max`, `inner_steps`, learning rates, rounds, seeds, dataset, and device are configured in YAML. Results are written as JSON under `results/`, which is ignored by Git. Smoke mode uses four clients, five rounds, one seed, synthetic data, and CPU.
+
+## Technical Highlights
+
+- Client-specific label corruption makes robustness measurable rather than implicit.
+- FedMAML and FedAvg share the same generated federation and clean evaluation contract.
+- The statistical report includes per-noise accuracy, deltas, sign-test p-values, and degradation slopes.
 
 ## Limitations
 
-- Default evidence is synthetic; treat image results as optional extensions.
-- For journal-depth robustness claims, add stronger noise-robust FL baselines.
+The default task is synthetic and does not establish image-dataset or deployment performance. Stronger noise-robust baselines and repeated real-dataset experiments are needed before making research claims. See the [root README](../../README.md) for the full suite and reproducibility guidance.

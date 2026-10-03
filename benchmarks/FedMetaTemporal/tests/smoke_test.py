@@ -1,4 +1,4 @@
-"""Smoke test for FedMeta-Temporal+."""
+"""Smoke test for FedMetaTemporal."""
 
 from __future__ import annotations
 
@@ -80,6 +80,7 @@ def test_temporal_maml():
 
     model = SimpleClassifier(input_dim=10, hidden_dim=16, n_classes=2)
     maml = TemporalMAML(model, inner_lr=0.01, outer_lr=0.001, inner_steps=1)
+    before = [parameter.detach().clone() for parameter in model.parameters()]
 
     tasks = [{
         "support_x": torch.randn(15, 10),
@@ -90,6 +91,7 @@ def test_temporal_maml():
     metrics = maml.meta_train_step(tasks)
     assert "meta_loss" in metrics
     assert "drift_detected" in metrics
+    assert any(not torch.equal(old, new) for old, new in zip(before, model.parameters()))
     print("   PASSED")
 
 
@@ -151,7 +153,7 @@ def test_temporal_fedavg():
 
 if __name__ == "__main__":
     print("=" * 50)
-    print("FedMeta-Temporal+ Smoke Test")
+    print("FedMetaTemporal Smoke Test")
     print("=" * 50)
     test_dataset()
     test_models()

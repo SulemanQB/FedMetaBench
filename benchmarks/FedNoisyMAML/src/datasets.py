@@ -37,12 +37,18 @@ def generate_gaussian_data(n_per_class=200, n_classes=4, dim=8, seed=42,
 
 def inject_label_noise(labels, noise_rate, n_classes, rng):
     """Flip labels with probability noise_rate to a random other class."""
+    if n_classes < 2:
+        raise ValueError("n_classes must be at least 2 to inject label noise")
     noisy = labels.clone()
     n = len(labels)
     mask = torch.tensor(rng.rand(n) < noise_rate)
     n_flip = mask.sum().item()
     if n_flip > 0:
-        random_labels = torch.tensor(rng.randint(0, n_classes, size=n_flip), dtype=labels.dtype)
+        random_offsets = torch.tensor(
+            rng.randint(0, n_classes - 1, size=n_flip), dtype=labels.dtype
+        )
+        original = labels[mask]
+        random_labels = random_offsets + (random_offsets >= original).to(labels.dtype)
         noisy[mask] = random_labels
     return noisy
 
@@ -76,6 +82,11 @@ class NoisyClient:
     def sample_task(self, n_support=10, n_query=10):
         """Sample support/query split for MAML-style training."""
         n = len(self.X)
+        if n < n_support + n_query:
+            raise ValueError(
+                f"Client {self.client_id} has {n} training samples; "
+                f"{n_support + n_query} are required for a task"
+            )
         perm = torch.randperm(n)
         s_idx = perm[:n_support]
         q_idx = perm[n_support:n_support + n_query]
@@ -86,6 +97,11 @@ class NoisyClient:
     def sample_task_all_noisy(self, n_support=10, n_query=10):
         """Both support and query use noisy labels."""
         n = len(self.X)
+        if n < n_support + n_query:
+            raise ValueError(
+                f"Client {self.client_id} has {n} training samples; "
+                f"{n_support + n_query} are required for a task"
+            )
         perm = torch.randperm(n)
         s_idx = perm[:n_support]
         q_idx = perm[n_support:n_support + n_query]
@@ -103,21 +119,23 @@ class NoisyClient:
 def create_noisy_federation(n_clients=10, noise_rates=None,
                             n_per_class=200, n_classes=4, seed=42):
     """Create a federation with heterogeneous label noise."""
+    if n_clients < 1:
+        raise ValueError("n_clients must be at least 1")
     if noise_rates is None:
         noise_rates = np.linspace(0.0, 0.4, n_clients)
 
     X, y = generate_gaussian_data(n_per_class=n_per_class, n_classes=n_classes, seed=seed)
 
-    # Partition data among clients (equal split)
+    # Partition all generated data, distributing any remainder across clients.
     n_total = len(X)
-    chunk_size = n_total // n_clients
+    if n_clients > n_total:
+        raise ValueError("n_clients cannot exceed the number of generated samples")
+    client_indices = np.array_split(np.arange(n_total), n_clients)
     clients = []
 
-    for i in range(n_clients):
-        start = i * chunk_size
-        end = start + chunk_size
+    for i, indices in enumerate(client_indices):
         noise_rate = noise_rates[i] if i < len(noise_rates) else noise_rates[-1]
-        client = NoisyClient(i, X[start:end], y[start:end],
+        client = NoisyClient(i, X[indices], y[indices],
                              noise_rate, n_classes, seed=seed)
         clients.append(client)
 

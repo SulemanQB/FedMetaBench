@@ -1,33 +1,37 @@
 # FairFedMeta
 
-Fairness-aware federated meta-learning for clinical-style hospital splits.
+FairFedMeta studies group fairness in federated clinical-style classification. Hospitals are clients, demographic groups are represented explicitly, and configurable baselines are compared on synthetic eICU-like sequences by default.
 
-## Idea
+## Workflow and Methods
 
-Combine **FedMAML-style personalization** with **group fairness** (demographic groups across hospitals). Compares:
+The runner loads or generates hospital sequences, creates meta-train and held-out hospital splits, builds support/query tasks, trains the selected algorithm, and records overall accuracy, worst-group accuracy, and the accuracy gap.
 
-- `fair_fedmaml` — fairness-constrained federated MAML
-- `fair_fedavg` — FedAvg with equal group weights
-- `agnostic_fair` — worst-group client reweighting (Mohri-style)
-- `fedavg`, `per_fedavg` — baselines
+| Config name | Role |
+| --- | --- |
+| `fair_fedmaml` | Fairness-constrained federated meta-learning |
+| `fair_fedavg` | Group-aware FedAvg baseline |
+| `agnostic_fair` | Worst-group client reweighting baseline |
+| `fedavg`, `per_fedavg` | Standard and personalization baselines |
 
-## Quick start
+## Run
 
 ```bash
-pip install -r requirements.txt
-python run_experiment.py --config configs/default.yaml
-python run_experiment.py --config configs/smoke.yaml   # short CPU smoke
-# Override algorithm:
+python -m pip install -r ../../requirements.txt
+python run_experiment.py --config configs/smoke.yaml
 python run_experiment.py --config configs/default.yaml algorithm.name=fair_fedmaml
+python tests/smoke_test.py
 ```
 
-## Data
+The smoke config uses synthetic data, CPU, three rounds, and a small hospital federation. Results are written to `results/<experiment>_results.json`.
 
-- Default: **synthetic** eICU-like placeholder (no PHI).
-- Optional: place processed eICU at `data/eicu_processed.h5` (see `src/datasets/eicu.py`).
+## Data and Configuration
 
-## Notes
+Synthetic data contains no PHI. A processed eICU HDF5 file can be supplied through `dataset.data_path`; the optional `h5py` dependency and expected layout are defined in `src/datasets/eicu.py`. YAML controls hospital count, sequence length, group count, model, fairness penalties, client sampling, rounds, and seed.
 
-- Metrics: overall accuracy, worst-group accuracy, accuracy gap.
-- Results: `results/<experiment>_results.json`
-- Part of [FedMetaBench](../../README.md) for GitHub demos; not the journal track.
+## Technical Highlights and Limits
+
+- Explicit group IDs flow through support/query task construction and fairness metrics.
+- LSTM and GRU clinical sequence models share the same runner contract.
+- The demo is not a clinical validation study: synthetic data is the default, protected-group semantics are simplified, and broader calibration and fairness analysis remain future work.
+
+See the [root README](../../README.md) for the suite architecture and project scope.

@@ -1,8 +1,7 @@
-"""Utility helpers for FedMeta-Temporal+."""
+"""Utility helpers for FedMetaTemporal."""
 
 from __future__ import annotations
 
-import os
 import random
 import logging
 from typing import Any

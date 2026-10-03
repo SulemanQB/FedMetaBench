@@ -1,34 +1,23 @@
-"""FairMAML — MAML with meta-learned per-group fairness weights.
+"""MAML with learned group weights and a max/min group-loss penalty.
 
-Core contribution of Paper 2 (FairFedMeta):
-    Meta-objective: min_θ Σ_i [ Σ_g λ_g · L_g(f_{θ_i'}, D_i^query) ]
-    where λ_g are meta-learned per-group weights that ensure equitable
-    performance across demographic groups.
-
-    θ_i' = θ - α · ∇_θ Σ_g L_g(f_θ, D_i^support)   (inner loop)
-    λ_g updated via meta-gradient to minimize worst-group performance gap.
+The inner loop adapts model parameters on support data. The outer loop
+optimizes query loss, group weights, and a penalty based on observed group
+loss differences.
 """
 
 from __future__ import annotations
 
 import copy
-import logging
-from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-logger = logging.getLogger(__name__)
+from torch.func import functional_call
 
 
 class FairMAML:
-    """MAML with meta-learned per-group fairness weights λ_g.
-
-    Key innovation: λ_g are treated as meta-parameters optimized in the
-    outer loop to minimize the fairness gap (max-group - min-group performance).
-    """
+    """MAML with learned per-group loss weights."""
 
     def __init__(
         self,
@@ -87,6 +76,35 @@ class FairMAML:
 
         return adapted_model
 
+    def _adapted_parameters(
+        self,
+        support_features: torch.Tensor,
+        support_labels: torch.Tensor,
+        support_groups: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
+        """Return differentiable adapted parameters for the outer loop."""
+        params = dict(self.model.named_parameters())
+        buffers = dict(self.model.named_buffers())
+        state = {**params, **buffers}
+
+        for _ in range(self.inner_steps):
+            out = functional_call(self.model, state, (support_features,))
+            loss = self._group_weighted_loss(out, support_labels, support_groups)
+            grads = torch.autograd.grad(
+                loss,
+                tuple(params.values()),
+                create_graph=True,
+                allow_unused=True,
+            )
+            params = {
+                name: param - self.inner_lr * grad
+                if grad is not None else param
+                for (name, param), grad in zip(params.items(), grads)
+            }
+            state = {**params, **buffers}
+
+        return state
+
     def outer_step(
         self,
         client_tasks: list[dict],
@@ -113,10 +131,10 @@ class FairMAML:
             qg = task["query_groups"].to(self.device)
 
             # Inner loop adaptation
-            adapted = self.inner_loop(sf, sl, sg)
+            adapted_state = self._adapted_parameters(sf, sl, sg)
 
             # Outer loss on query set with fairness weighting
-            query_out = adapted(qf)
+            query_out = functional_call(self.model, adapted_state, (qf,))
             query_loss = self._group_weighted_loss(query_out, ql, qg)
 
             # Fairness penalty: minimize max-min group performance gap
@@ -257,7 +275,7 @@ class FairMAML:
         test_tasks: list[dict],
         inner_steps: int | None = None,
     ) -> dict[str, float]:
-        """Comprehensive fairness evaluation on test tasks."""
+        """Evaluate adapted task accuracy on test tasks."""
         inner_steps = inner_steps or self.inner_steps
         group_accs = {g: [] for g in range(self.n_groups)}
         group_losses = {g: [] for g in range(self.n_groups)}

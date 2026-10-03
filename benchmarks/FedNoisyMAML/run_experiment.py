@@ -9,15 +9,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import json
 import argparse
-import copy
 import torch
 import numpy as np
 from math import comb
-from collections import defaultdict
 from src.models import ClassifierMLP, ConvNet
 from src.datasets import create_noisy_federation
 from src.algorithms import FedMAML, FedAvg
-import torch.nn.functional as F
 
 
 DEFAULT_SEEDS = [42, 123, 456, 789, 1024, 2048, 3072, 4096, 5120, 6144]

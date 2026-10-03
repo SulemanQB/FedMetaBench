@@ -1,12 +1,4 @@
-"""Neural CDE-inspired encoder for irregular time series.
-
-Simplified Neural CDE that:
-1. Computes natural cubic spline interpolation of irregular observations
-2. Uses an ODE-RNN-like architecture (GRU with time-aware updates)
-3. Outputs a fixed-size representation for downstream classification
-
-This avoids torchcde dependency by implementing a lightweight version.
-"""
+"""GRU-based encoder with optional time-gap decay for sequence inputs."""
 
 from __future__ import annotations
 
@@ -16,7 +8,7 @@ import torch.nn.functional as F
 
 
 class NeuralCDEEncoder(nn.Module):
-    """Simplified Neural CDE encoder using GRU with time-gap awareness.
+    """Neural-CDE-inspired encoder using a GRU with time-gap awareness.
 
     For irregular time series, incorporates inter-observation time gaps
     as additional features and uses exponential decay for hidden states.
@@ -95,7 +87,7 @@ class NeuralCDEEncoder(nn.Module):
 
 
 class TemporalClassifier(nn.Module):
-    """Full model: Neural CDE encoder + classification head."""
+    """Sequence classifier built on the time-aware GRU encoder."""
 
     def __init__(
         self,

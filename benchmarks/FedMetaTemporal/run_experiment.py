@@ -1,4 +1,4 @@
-"""FedMeta-Temporal+ experiment runner.
+"""FedMetaTemporal experiment runner.
 
 Usage:
     python run_experiment.py --config configs/default.yaml
@@ -58,7 +58,6 @@ def build_algorithm(cfg: dict, model: torch.nn.Module, device: torch.device):
     if name in ("temporal_fedavg", "fedavg"):
         return TemporalFedAvg(
             temporal_decay=acfg.get("temporal_decay", 0.9),
-            ewc_lambda=acfg.get("ewc_lambda", 0.5),
             clients_per_round=acfg.get("clients_per_round", 5),
             **common,
         )
@@ -100,6 +99,16 @@ def run_experiment(cfg: dict) -> dict:
     train_ids, test_ids = fed_data.get_train_test_split()
     logger.info(f"Train: {len(train_ids)} clients, Test: {len(test_ids)} clients, Drift: {dcfg['drift_type']}")
 
+    configured_input_dim = cfg["model"].get("input_dim")
+    configured_n_classes = cfg["model"].get("n_classes")
+    if configured_input_dim != fed_data.n_features or configured_n_classes != fed_data.n_classes:
+        logger.warning(
+            "Synchronizing model dimensions with generated data: input_dim=%s, n_classes=%s",
+            fed_data.n_features,
+            fed_data.n_classes,
+        )
+    cfg["model"]["input_dim"] = fed_data.n_features
+    cfg["model"]["n_classes"] = fed_data.n_classes
     model = build_model(cfg).to(device)
     acfg = cfg["algorithm"]
     tcfg = cfg["training"]

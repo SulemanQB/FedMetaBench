@@ -26,6 +26,10 @@ def test_label_noise():
                                rng=np.random.RandomState(0))
     n_flipped = (labels != noisy).sum().item()
     assert 15 < n_flipped < 50  # ~30% flipped
+    fully_noisy = inject_label_noise(
+        labels, noise_rate=1.0, n_classes=4, rng=np.random.RandomState(1)
+    )
+    assert torch.all(fully_noisy != labels)
     print(f"[PASS] Label noise injection: {n_flipped}/100 flipped")
 
 
@@ -67,12 +71,14 @@ def test_fedmaml():
     clients = create_noisy_federation(n_clients=3, n_per_class=50, n_classes=4, seed=0)
     model = ClassifierMLP(input_dim=8, hidden_size=32, n_classes=4)
     trainer = FedMAML(model, clients, outer_lr=0.001, inner_lr=0.01, inner_steps=2)
+    before = [parameter.detach().clone() for parameter in model.parameters()]
 
     losses = []
     for _ in range(5):
         l = trainer.train_round(n_support=8, n_query=8)
         losses.append(l)
     assert len(losses) == 5
+    assert any(not torch.equal(old, new) for old, new in zip(before, model.parameters()))
 
     accs = trainer.evaluate(n_test=20)
     assert len(accs) == 3

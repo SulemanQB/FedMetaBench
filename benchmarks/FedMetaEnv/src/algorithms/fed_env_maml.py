@@ -1,23 +1,15 @@
-"""FedMeta-Env algorithms.
-
-Implements:
-- EnvMAML: MAML for station-level few-shot adaptation (regression)
-- FedEnvMAML: Federated EnvMAML with station-as-client
-- Baselines: FedAvg, Local-only, Fine-tune, Per-FedAvg
-"""
+"""FedMetaEnv algorithms for station-level regression and adaptation."""
 
 from __future__ import annotations
 
 import copy
-import logging
 from typing import Any
 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-logger = logging.getLogger(__name__)
+from torch.func import functional_call
 
 
 class EnvMAML:
@@ -59,6 +51,34 @@ class EnvMAML:
 
         return adapted
 
+    def _adapted_parameters(
+        self,
+        support_x: torch.Tensor,
+        support_y: torch.Tensor,
+    ) -> dict[str, torch.Tensor]:
+        """Return differentiable adapted parameters for the outer loop."""
+        params = dict(self.model.named_parameters())
+        buffers = dict(self.model.named_buffers())
+        state = {**params, **buffers}
+
+        for _ in range(self.inner_steps):
+            pred = functional_call(self.model, state, (support_x,))
+            loss = F.mse_loss(pred, support_y)
+            grads = torch.autograd.grad(
+                loss,
+                tuple(params.values()),
+                create_graph=True,
+                allow_unused=True,
+            )
+            params = {
+                name: param - self.inner_lr * grad
+                if grad is not None else param
+                for (name, param), grad in zip(params.items(), grads)
+            }
+            state = {**params, **buffers}
+
+        return state
+
     def meta_train_step(
         self,
         tasks: list[dict[str, torch.Tensor]],
@@ -73,8 +93,8 @@ class EnvMAML:
             qx = task["query_x"].to(self.device)
             qy = task["query_y"].to(self.device)
 
-            adapted = self.inner_loop(sx, sy)
-            query_pred = adapted(qx)
+            adapted_state = self._adapted_parameters(sx, sy)
+            query_pred = functional_call(self.model, adapted_state, (qx,))
             query_loss = F.mse_loss(query_pred, qy)
             total_loss += query_loss
 

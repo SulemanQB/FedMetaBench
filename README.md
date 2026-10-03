@@ -1,67 +1,159 @@
 # FedMetaBench
 
-Federated learning trains a shared model across clients that cannot pool their raw data. Those clients still disagree with each other: label noise varies by site, demographic groups are uneven, a new sensor has almost no history, and the distribution moves over time. FedMetaBench is a PyTorch suite of four independent benchmarks that compare meta-learning-style personalization (MAML and related variants) with FedAvg-style baselines under those shifts. A clean clone runs on synthetic data. Beijing multi-site air-quality CSVs and a processed eICU file are optional inputs. Each run writes JSON under that benchmark's `results/` directory. This page does not tabulate scores.
+**FedMetaBench is a PyTorch benchmark suite for testing federated personalization under noisy labels, group imbalance, new sensing locations, and temporal concept drift.** It contains four independent, CPU-runnable demonstrations that compare MAML-style adaptation with federated averaging baselines on synthetic data, with optional clinical and air-quality datasets.
 
-## What's included
+The project demonstrates experiment design, PyTorch modeling, federated client simulation, reproducible YAML configuration, fairness and drift evaluation, and lightweight research-code validation. A clean checkout does not require private data or a committed model checkpoint.
 
-| Benchmark | Question | Methods | Data on a clean clone | Smoke (`configs/smoke.yaml`) |
-|-----------|----------|---------|------------------------|------------------------------|
-| [FedNoisyMAML](benchmarks/FedNoisyMAML) | Does per-client adaptation hold up when label noise differs across clients? | FedMAML and FedAvg (both run on every experiment) | Synthetic Gaussian mixture. MNIST and CIFAR are optional and need `torchvision`. | 4 clients, 5 rounds, 1 seed, CPU |
-| [FairFedMeta](benchmarks/FairFedMeta) | Can federated meta-learning narrow worst-group gaps across hospital-style splits? | `fair_fedmaml`, `fair_fedavg`, `agnostic_fair`, `fedavg`, `per_fedavg` | Synthetic clinical sequences (no PHI). Optional file: `data/eicu_processed.h5`. | `fair_fedavg`, 3 rounds, CPU |
-| [FedMetaEnv](benchmarks/FedMetaEnv) | How quickly can a model cold-start on a held-out monitoring station (leave-one-station-out)? | `fed_env_maml`, `fedavg`, `local_only` | Synthetic 12-station streams. UCI Beijing PRSA CSVs are used when a searched path contains them; see that package README. | `fedavg`, 2 rounds, first 2 stations, CPU |
-| [FedMetaTemporal](benchmarks/FedMetaTemporal) | How do federated methods behave under temporal concept drift? | `temporal_fedavg`, `temporal_maml`, `ewc_maml` | Synthetic drifting client streams (`sudden`, `gradual`, `recurring`, or `incremental`). | `temporal_maml`, sudden drift, 3 rounds, CPU |
+## Problem and Motivation
 
-Per-benchmark READMEs describe the methods. Smoke and default configs are the reproducible entry points in this repository.
+Federated clients cannot pool raw data, but they also do not share the same data distribution. A hospital may have different group proportions, a sensor may be newly deployed, labels may be noisier at one site, and the target distribution may change over time. FedMetaBench makes those shifts explicit so personalization methods can be compared with simple baselines under controlled conditions.
 
-## How to run
+## Benchmarks
 
-Python 3.10 or newer. The root [`requirements.txt`](requirements.txt) is what the smoke script needs: PyTorch ≥ 2.0, NumPy, PyYAML, SciPy, pandas, tqdm, and scikit-learn.
+| Benchmark | Research question | Main methods | Default data |
+| --- | --- | --- | --- |
+| [FedNoisyMAML](benchmarks/FedNoisyMAML) | Does adaptation remain useful when label noise differs by client? | FedMAML, FedAvg | Synthetic Gaussian mixture |
+| [FairFedMeta](benchmarks/FairFedMeta) | Can federated training reduce worst-group performance gaps? | FairFedMAML, FairFedAvg, AgnosticFairFL, FedAvg, Per-FedAvg | Synthetic clinical sequences |
+| [FedMetaEnv](benchmarks/FedMetaEnv) | How well does a model cold-start on a held-out station? | FedEnvMAML, FedAvg, LocalOnly | Synthetic multi-station streams |
+| [FedMetaTemporal](benchmarks/FedMetaTemporal) | How do methods respond to temporal concept drift? | TemporalFedAvg, TemporalMAML, EWCMAML | Synthetic drifting streams |
+
+Optional inputs are documented in each benchmark README: MNIST/CIFAR-10, processed eICU data, and Beijing PRSA air-quality CSVs. No empirical score is claimed here; run the supplied configs to generate local JSON results.
+
+## Architecture and Workflow
+
+Each benchmark is intentionally standalone: `run_experiment.py` loads YAML, creates or loads client data, trains the configured algorithm, evaluates benchmark-specific client, station, or task data, and writes JSON under `results/`.
+
+```mermaid
+flowchart LR
+	A[Config and seed] --> B[Client data]
+	B --> C[Preprocessing and task split]
+	C --> D[PyTorch model]
+	D --> E[Federated training]
+	E --> F[Adaptation or baseline evaluation]
+	F --> G[Metrics and JSON results]
+```
+
+The common experimental path is:
+
+```text
+Data -> client/task construction -> model -> federated training -> evaluation -> results JSON
+```
+
+## Technologies
+
+- Python 3.10+ and PyTorch 2.0+
+- NumPy, SciPy, pandas, scikit-learn, PyYAML, and tqdm
+- YAML-driven experiments with deterministic seeds
+- Optional `torchvision` for image datasets and `h5py` for processed eICU input
+- Bash and PowerShell smoke runners for Linux/macOS and Windows workflows
+
+## Project Structure
+
+```text
+FedMetaBench/
+├── README.md
+├── requirements.txt
+├── benchmarks/
+│   ├── FedNoisyMAML/
+│   ├── FairFedMeta/
+│   ├── FedMetaEnv/
+│   └── FedMetaTemporal/
+├── docs/SCOPE.md
+└── scripts/
+	├── run_smoke_all.sh
+	└── run_smoke_all.ps1
+```
+
+Every benchmark contains a runner, `src/` implementation, `configs/`, tests, and a focused README.
+
+## Installation and Setup
+
+Use a fresh virtual environment and a Python version supported by the installed PyTorch wheel. The root requirements pin the core versions used by the smoke configurations. Benchmark-specific requirement files inherit those pins and add only optional dataset or plotting extensions.
 
 ```bash
 git clone https://github.com/SulemanQB/FedMetaBench.git
 cd FedMetaBench
-python3 -m venv .venv
-source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate                 # Windows: .venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
+```
+
+The smoke configs explicitly use CPU. A GPU is optional for longer experiments; verify that the PyTorch wheel matches the selected Python version and platform.
+
+## Demonstration
+
+Run all four short experiments from the repository root:
+
+```bash
 bash scripts/run_smoke_all.sh
 ```
 
-A finished smoke run prints:
+On Windows PowerShell:
+
+```powershell
+./scripts/run_smoke_all.ps1
+```
+
+The successful final line is:
 
 ```text
 [FedMetaBench] All smoke runs completed.
 ```
 
-Checked on Python 3.12.3: a new virtualenv, `pip install -r requirements.txt`, and `bash scripts/run_smoke_all.sh` finish with that line. The same environment passes each package's `python tests/smoke_test.py`. On Linux the default PyTorch wheel from the root requirements file includes CUDA libraries; the smoke configs still set `device: cpu` and complete without a GPU.
-
-`scripts/run_smoke_all.sh` calls `python3` (override with `PYTHON=...`) and runs `run_experiment.py --config configs/smoke.yaml` in each package. JSON lands in `benchmarks/<name>/results/` and is gitignored.
-
-One benchmark at a time:
+Each run writes a gitignored JSON artifact to `benchmarks/<benchmark>/results/`. To run one benchmark, use its package directory, for example:
 
 ```bash
-cd benchmarks/FedNoisyMAML && python run_experiment.py --config configs/smoke.yaml
-cd benchmarks/FairFedMeta && python run_experiment.py --config configs/smoke.yaml
-cd benchmarks/FedMetaEnv && python run_experiment.py --config configs/smoke.yaml
-cd benchmarks/FedMetaTemporal && python run_experiment.py --config configs/smoke.yaml
+cd benchmarks/FedMetaTemporal
+python run_experiment.py --config configs/smoke.yaml
 ```
 
-`configs/default.yaml` is the longer demo. FedNoisyMAML's default config requests CUDA, uses 10 seeds and 150 rounds on the Gaussian mixture, and switches to CPU when CUDA is unavailable. Image datasets (`mnist`, `cifar10`) need the extra packages in [`benchmarks/FedNoisyMAML/requirements.txt`](benchmarks/FedNoisyMAML/requirements.txt), including `torchvision`. A real eICU file for FairFedMeta needs `h5py` from that package's requirements file. `matplotlib` and `seaborn` are listed per benchmark and are unused by the smoke script.
+For a longer run, replace `smoke.yaml` with `default.yaml`. The configs are the source of truth for rounds, clients, model sizes, seeds, evaluation frequency, and output directories. FairFedMeta also accepts dot-notation overrides such as `algorithm.name=fedavg`.
 
-Each package also has a shorter unit check: `python tests/smoke_test.py` from that package directory. The end-to-end check is `bash scripts/run_smoke_all.sh`.
+## Results and Evaluation
 
-## Layout
+Results are generated locally and are not committed. The benchmarks report task-specific metrics including accuracy, worst-group accuracy and fairness gaps, regression MSE/MAE/RMSE, adaptation improvement, temporal accuracy, and drift summaries. Because runtime and hardware affect these experiments, this repository does not fabricate a leaderboard or hard-code results that have not been reproduced from the current checkout.
 
-Each benchmark stands alone (`run_experiment.py`, `src/`, `configs/`, `tests/`). FedMetaTemporal builds the algorithm named in the YAML (`temporal_fedavg`, `temporal_maml`, or `ewc_maml`).
+## Data and Reproducibility
 
-## What is *not* in this repo
+- Synthetic data is the default and contains no PHI.
+- Every experiment exposes a seed in its YAML config.
+- Optional datasets must be downloaded separately and are ignored by Git.
+- FedMetaEnv searches configured relative data directories; an external directory can be supplied with `FEDMETAENV_DATA_DIR`.
+- FedNoisyMAML image data uses `DATA_ROOT` when `mnist` or `cifar10` is selected.
+- Real eICU input requires the optional package and the file layout documented in [FairFedMeta](benchmarks/FairFedMeta/README.md).
 
-| Project | Reason |
-|---------|--------|
-| FedSense | Journal-track air-quality FL |
-| MetaDrift / MetaForgetting | Journal-track novelty candidates |
-| EvalFedMeta / FedMAMLBudget | Separate research tracks |
+## Limitations
 
-## License
+These are research demonstrations, not production federated-learning infrastructure. Synthetic distributions are useful for controlled comparisons but do not establish clinical, environmental, or deployment performance. Real datasets, stronger baselines, confidence intervals, and independent replications are still needed for research claims. Training the default configurations can be substantially slower than the smoke configs.
 
-MIT — see [LICENSE](LICENSE).
+## Technical Highlights
+
+- Four isolated benchmark workflows around distinct federated distribution shifts.
+- Configurable PyTorch models, client/task construction, adaptation loops, baselines, and task-specific metrics.
+- Deterministic smoke configurations and cross-platform orchestration scripts.
+- Optional sensitive or large inputs stay outside the repository, with documented configuration boundaries.
+- JSON result artifacts can be inspected or compared without rerunning the training loop.
+
+## Troubleshooting
+
+| Symptom | Action |
+| --- | --- |
+| `torch` fails to import with a native DLL or shared-library error | Install a PyTorch wheel compatible with your Python version and OS in a clean virtual environment. |
+| A real dataset is not found | Check the benchmark README and pass a portable relative directory or documented environment variable. Synthetic fallback is expected when optional data is absent. |
+| A run is too slow | Start with `configs/smoke.yaml`, reduce rounds or clients in a copied config, and keep the seed fixed. |
+| CUDA is unavailable | Use the CPU smoke configs or set the experiment device to `cpu`; no GPU is required for the demonstration path. |
+
+## What the code shows
+
+1. Start with the benchmark table and explain why federated clients need personalization.
+2. Open one package README and its `configs/smoke.yaml` to show the experiment contract.
+3. Run the repository smoke script from the root, using Bash or PowerShell for your platform.
+4. Open a generated JSON result and connect its metrics to the benchmark question.
+5. Walk through the runner: config, client data, model, training algorithm, evaluation, and artifact writing.
+6. Explain the engineering decision to default to synthetic data and keep real datasets optional and uncommitted.
+7. Discuss limitations, especially synthetic-data validity, runtime, and the need for broader baselines and repeated real-data evaluation.
+
+## Project Scope and License
+
+[docs/SCOPE.md](docs/SCOPE.md) records which research tracks belong in this repository and which remain separate. The project is released under the MIT License; see [LICENSE](LICENSE).

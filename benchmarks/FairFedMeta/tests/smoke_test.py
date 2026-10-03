@@ -26,6 +26,9 @@ def test_dataset():
 
     support, query = fed.get_group_stratified_split(train_ids[0], k_shot=5)
     assert "features" in support and "features" in query
+    _, _, _, groups_3, metadata_3 = loader.load(n_groups=3, seed=7)
+    assert metadata_3["n_groups"] == 3
+    assert set(groups_3).issubset({0, 1, 2})
     print("   PASSED")
 
 
@@ -52,6 +55,7 @@ def test_fair_maml():
 
     model = ClinicalLSTM(input_dim=15, hidden_dim=16, n_layers=1, n_classes=2)
     fair_maml = FairMAML(model=model, n_groups=3, inner_lr=0.01, outer_lr=0.001, inner_steps=1)
+    before = [parameter.detach().clone() for parameter in model.parameters()]
 
     # Create a synthetic task matching expected API
     task = {
@@ -65,6 +69,7 @@ def test_fair_maml():
 
     metrics = fair_maml.outer_step([task])
     assert "meta_loss" in metrics, f"Expected 'meta_loss', got keys: {list(metrics.keys())}"
+    assert any(not torch.equal(old, new) for old, new in zip(before, model.parameters()))
     print("   PASSED")
 
 

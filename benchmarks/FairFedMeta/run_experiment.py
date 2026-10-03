@@ -11,7 +11,6 @@ import argparse
 import json
 import os
 import sys
-import copy
 import logging
 from pathlib import Path
 
@@ -27,7 +26,7 @@ from src.models.clinical import ClinicalLSTM, ClinicalGRU
 from src.algorithms.fair_maml import FairMAML
 from src.algorithms.fair_fedmaml import FairFedMAML
 from src.algorithms.baselines import StandardFedAvg, PerFedAvg, FairFedAvg, AgnosticFairFL
-from src.metrics.fairness import accuracy_parity, comprehensive_fairness_report
+from src.metrics.fairness import accuracy_parity
 
 logger = logging.getLogger(__name__)
 
@@ -154,12 +153,11 @@ def run_experiment(cfg: dict) -> dict:
         n_groups=dcfg.get("n_groups", 5),
         n_features=dcfg.get("n_features", 15),
         seq_len=dcfg.get("seq_len", 48),
+        seed=cfg["experiment"]["seed"],
     )
 
     # Sync model input dim with loaded feature width
-    cfg["model"]["input_dim"] = int(features.shape[-1]) if features.ndim == 2 else int(features.shape[-1])
-    if features.ndim == 3:
-        cfg["model"]["input_dim"] = int(features.shape[-1])
+    cfg["model"]["input_dim"] = int(features.shape[-1])
 
     fed_dataset = FairFederatedDataset(
         features, labels, hospital_ids, group_ids,
@@ -195,10 +193,10 @@ def run_experiment(cfg: dict) -> dict:
 
         # Train
         if is_fedmaml:
-            round_metrics = algorithm.train_round(fed_dataset, selected)
+            algorithm.train_round(fed_dataset, selected)
         else:
             tasks = prepare_client_tasks(fed_dataset, selected, k_shot, device)
-            round_metrics = algorithm.train_round(tasks)
+            algorithm.train_round(tasks)
 
         # Evaluate
         if rnd % eval_every == 0 or rnd == n_rounds:

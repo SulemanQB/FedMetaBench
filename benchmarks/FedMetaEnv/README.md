@@ -1,38 +1,36 @@
 # FedMetaEnv
 
-Federated meta-learning for **environmental sensing** with leave-one-station-out (LOSO) evaluation on Beijing multi-site air quality.
+FedMetaEnv evaluates federated personalization for environmental sensing. Each monitoring station is a client; leave-one-station-out (LOSO) evaluation measures how quickly a model adapts to a held-out station.
 
-## Idea
+## Workflow and Methods
 
-Each monitoring station is a client. Train on N−1 stations, adapt with K days of data on the held-out station, and compare:
+The loader uses Beijing PRSA CSVs when found and otherwise generates twelve synthetic station streams with spatial heterogeneity. The runner trains on all but one station, evaluates before and after K-day adaptation, and reports regression metrics.
 
-- `fed_env_maml` — federated MAML for cold-start stations
-- `fedavg` — standard FedAvg
-- `local_only` — train only on the target station
+| Config name | Role |
+| --- | --- |
+| `fed_env_maml` | Federated MAML for cold-start stations |
+| `fedavg` | Standard federated averaging |
+| `local_only` | Target-station-only baseline |
 
-## Quick start
+## Run
 
 ```bash
-pip install -r requirements.txt
-# Optional: link real UCI Beijing CSVs
-# mkdir -p data && ln -s /path/to/PRSA_Data_20130301-20170228 data/
-python run_experiment.py --config configs/default.yaml
+python -m pip install -r ../../requirements.txt
 python run_experiment.py --config configs/smoke.yaml
+python run_experiment.py --config configs/default.yaml
+python tests/smoke_test.py
 ```
 
-## Data
+The smoke config evaluates the first two stations and uses `k_days_list: [3]`. Results are written to `results/<experiment>_results.json`, with keys such as `k3` matching the configured evaluation budget.
 
-Looks for `PRSA_Data_<Station>_*.csv` under:
+## Data and Configuration
 
-1. `./data/beijing_air_quality/`
-2. `./data/PRSA_Data_20130301-20170228/`
-3. `./data/`
-4. FedSense data path (if present on this machine)
+Place files named `PRSA_Data_<Station>_20130301-20170228.csv` under `data/`, `data/beijing_air_quality/`, or `data/PRSA_Data_20130301-20170228/`. For an external directory, set `FEDMETAENV_DATA_DIR`. Missing CSVs intentionally trigger the synthetic fallback. YAML controls window length, pollutant target, station budget, model, rounds, and K-day evaluation list.
 
-Falls back to synthetic station streams if CSVs are missing.
+## Technical Highlights and Limits
 
-## Notes
+- LOSO makes cold-start generalization explicit rather than mixing train and test stations.
+- Metrics include MSE, MAE, RMSE, and adaptation improvement.
+- Synthetic streams are not a substitute for real sensor validation; the sibling FedSense research track is intentionally outside this repository.
 
-- LOSO metrics: pre/post-adapt MSE, MAE, RMSE, improvement.
-- Sibling journal project: **FedSense** (separate repo / paper track).
-- Part of [FedMetaBench](../../README.md).
+See the [root README](../../README.md) for the full suite and project scope.

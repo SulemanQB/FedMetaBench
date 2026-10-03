@@ -1,7 +1,6 @@
 """eICU dataset loader for FairFedMeta.
 
-eICU Collaborative Research Database: 200,859 ICU stays across 208 hospitals.
-Each hospital = natural federated client.
+Each hospital is treated as a federated client.
 Sensitive attribute: ethnicity (used for fairness evaluation).
 
 NOTE: Requires access to eICU via PhysioNet (credentialed access).
@@ -66,7 +65,7 @@ class EICUFederatedLoader:
 
         logger.warning(
             f"eICU data not found at {data_path}. "
-            "Generating synthetic placeholder data for development."
+            "Generating synthetic fallback data for development."
         )
         return self._generate_synthetic(
             n_samples=int(kwargs.get("n_samples", 5000)),
@@ -74,6 +73,7 @@ class EICUFederatedLoader:
             n_groups=int(kwargs.get("n_groups", 5)),
             n_features=int(kwargs.get("n_features", 15)),
             seq_len=int(kwargs.get("seq_len", 48)),
+            seed=int(kwargs.get("seed", 42)),
         )
 
     def _load_h5(self, path: Path):
@@ -96,13 +96,19 @@ class EICUFederatedLoader:
         return features, labels, hospital_ids, group_ids, metadata
 
     def _generate_synthetic(self, n_samples: int = 5000, n_hospitals: int = 20,
-                            n_groups: int = 5, n_features: int = 30, seq_len: int = 48):
+                            n_groups: int = 5, n_features: int = 30, seq_len: int = 48,
+                            seed: int = 42):
         """Generate synthetic eICU-like data for development/testing."""
-        rng = np.random.RandomState(42)
+        if n_groups < 2:
+            raise ValueError("n_groups must be at least 2")
+        rng = np.random.RandomState(seed)
 
-        # Assign hospitals and groups with realistic imbalance
+        # Assign hospitals and groups with configurable imbalance.
         hospital_ids = rng.choice(n_hospitals, n_samples, p=_hospital_dist(n_hospitals, rng))
-        group_ids = rng.choice(n_groups, n_samples, p=[0.65, 0.15, 0.10, 0.05, 0.05])
+        group_weights = np.ones(n_groups, dtype=float)
+        default_weights = np.array([0.65, 0.15, 0.10, 0.05, 0.05])
+        group_weights[:min(n_groups, len(default_weights))] = default_weights[:n_groups]
+        group_ids = rng.choice(n_groups, n_samples, p=group_weights / group_weights.sum())
 
         # Generate features: each hospital has slightly different distribution
         features = np.zeros((n_samples, seq_len, n_features), dtype=np.float32)
@@ -139,7 +145,7 @@ class EICUFederatedLoader:
 
 
 def _hospital_dist(n: int, rng: np.random.RandomState) -> np.ndarray:
-    """Realistic hospital size distribution (log-normal)."""
+    """Generate hospital proportions from a log-normal distribution."""
     sizes = rng.lognormal(0, 1, n)
     return sizes / sizes.sum()
 
@@ -226,11 +232,15 @@ class FairFederatedDataset:
         self, train_frac: float = 0.6, val_frac: float = 0.2, seed: int = 42,
     ):
         """Split hospitals into meta-train/val/test."""
+        if len(self.hospital_list) < 2:
+            raise ValueError("At least two hospitals are required for meta train/test splits")
+        if not 0 < train_frac < 1 or not 0 <= val_frac < 1:
+            raise ValueError("train_frac must be in (0, 1) and val_frac in [0, 1)")
         rng = np.random.RandomState(seed)
         n = len(self.hospital_list)
         perm = rng.permutation(n)
-        n_train = int(n * train_frac)
-        n_val = int(n * val_frac)
+        n_train = max(1, min(n - 1, int(n * train_frac)))
+        n_val = min(int(n * val_frac), n - n_train - 1)
         self.meta_train_hospitals = self.hospital_list[perm[:n_train]].tolist()
         self.meta_val_hospitals = self.hospital_list[perm[n_train:n_train + n_val]].tolist()
         self.meta_test_hospitals = self.hospital_list[perm[n_train + n_val:]].tolist()

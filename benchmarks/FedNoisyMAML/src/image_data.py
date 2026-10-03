@@ -7,7 +7,7 @@ import os
 import torch
 import numpy as np
 
-DATA_ROOT = os.environ.get("DATA_ROOT", "/home/sqamar/Data")
+DATA_ROOT = os.environ.get("DATA_ROOT", "./data")
 
 _dataset_cache = {}
 
@@ -91,8 +91,13 @@ class NoisyImageClient:
         mask = torch.tensor(rng.rand(len(self.y_clean)) < noise_rate)
         n_flip = mask.sum().item()
         if n_flip > 0:
-            self.y_noisy[mask] = torch.tensor(
-                rng.randint(0, n_classes, size=n_flip), dtype=y.dtype)
+            random_offsets = torch.tensor(
+                rng.randint(0, n_classes - 1, size=n_flip), dtype=y.dtype
+            )
+            original = self.y_clean[mask]
+            self.y_noisy[mask] = random_offsets + (
+                random_offsets >= original
+            ).to(y.dtype)
         self.n_corrupted = (self.y_clean != self.y_noisy).sum().item()
 
         self.X_test = X[perm[:n_test]]

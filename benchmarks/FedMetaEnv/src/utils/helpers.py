@@ -1,8 +1,7 @@
-"""Utility helpers for FedMeta-Env."""
+"""Utility helpers for FedMetaEnv."""
 
 from __future__ import annotations
 
-import os
 import random
 import logging
 from typing import Any

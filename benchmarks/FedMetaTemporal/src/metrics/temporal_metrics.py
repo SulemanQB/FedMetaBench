@@ -1,4 +1,4 @@
-"""Temporal metrics for FedMeta-Temporal+.
+"""Temporal metrics for FedMetaTemporal.
 
 Drift-aware evaluation metrics:
 - Prequential accuracy (test-then-train)

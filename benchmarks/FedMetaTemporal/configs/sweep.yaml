@@ -1,4 +1,4 @@
-# FedMeta-Temporal+ Drift Ablation Sweep
+# FedMetaTemporal drift ablation sweep
 
 sweep:
   seeds: [42, 123, 456]

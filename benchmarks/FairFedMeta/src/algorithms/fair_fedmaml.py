@@ -9,8 +9,6 @@ Combines:
 from __future__ import annotations
 
 import copy
-import logging
-from typing import Any
 
 import numpy as np
 import torch
@@ -18,8 +16,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from .fair_maml import FairMAML
-
-logger = logging.getLogger(__name__)
 
 
 class FairFedMAML:
@@ -54,7 +50,6 @@ class FairFedMAML:
     ):
         self.global_model = model.to(device)
         self.n_groups = n_groups
-        self.num_rounds = num_rounds
         self.clients_per_round = clients_per_round
         self.inner_lr = inner_lr
         self.outer_lr = outer_lr
@@ -63,7 +58,6 @@ class FairFedMAML:
         self.local_meta_steps = local_meta_steps
         self.fairness_penalty = fairness_penalty
         self.device = device
-        self.seed = seed
 
         # Global fairness weights
         self.global_log_lambdas = torch.zeros(n_groups, device=device)

@@ -1,4 +1,4 @@
-"""FedMeta-Env experiment runner.
+"""FedMetaEnv experiment runner.
 
 Usage:
     python run_experiment.py --config configs/default.yaml
@@ -89,18 +89,26 @@ def run_experiment(cfg: dict) -> dict:
             elif acfg["name"] == "local_only":
                 import copy
                 local = LocalOnly(copy.deepcopy(model), acfg.get("inner_lr", 0.01), str(device))
-                split = fed_data.get_k_shot_split(test_station, k_days)
-                eval_results = {"k7": local.train_and_evaluate(
-                    split["support_x"], split["support_y"],
-                    split["query_x"], split["query_y"],
-                )}
+                k_list = cfg["evaluation"].get("k_days_list", [k_days])
+                eval_results = {}
+                for k in k_list:
+                    split = fed_data.get_k_shot_split(test_station, int(k))
+                    eval_results[f"k{int(k)}"] = local.train_and_evaluate(
+                        split["support_x"], split["support_y"],
+                        split["query_x"], split["query_y"],
+                    )
             else:
                 import copy
                 fedavg = FedAvgEnv(copy.deepcopy(model), acfg.get("inner_lr", 0.01), device=str(device))
                 for rnd in range(1, n_rounds + 1):
                     fedavg.train_round(fed_data, train_stations, k_days)
-                split = fed_data.get_k_shot_split(test_station, k_days)
-                eval_results = {"k7": fedavg.evaluate(split["query_x"], split["query_y"])}
+                k_list = cfg["evaluation"].get("k_days_list", [k_days])
+                eval_results = {}
+                for k in k_list:
+                    split = fed_data.get_k_shot_split(test_station, int(k))
+                    eval_results[f"k{int(k)}"] = fedavg.evaluate(
+                        split["query_x"], split["query_y"]
+                    )
 
             all_results[f"station_{test_station}"] = eval_results
 

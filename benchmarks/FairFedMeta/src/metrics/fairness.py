@@ -137,7 +137,7 @@ def comprehensive_fairness_report(
     n_groups: int | None = None,
     group_names: dict[int, str] | None = None,
 ) -> dict[str, Any]:
-    """Full fairness evaluation combining all metrics."""
+    """Combine the implemented parity and group-accuracy metrics."""
     dp = demographic_parity(predictions, group_ids, n_groups)
     eo = equalized_odds(predictions, labels, group_ids, n_groups)
     eopp = equal_opportunity(predictions, labels, group_ids, n_groups)

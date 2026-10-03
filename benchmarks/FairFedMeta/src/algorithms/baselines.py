@@ -10,10 +10,7 @@ Implements:
 from __future__ import annotations
 
 import copy
-from collections import defaultdict
-from typing import Any
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -93,10 +90,7 @@ class StandardFedAvg:
 
 
 class PerFedAvg:
-    """Per-FedAvg / Reptile-style personalization (Fallah et al. 2020 inspired).
-
-    Uses a first-order Reptile update for stability (no second-order graph).
-    """
+    """First-order Reptile-style personalization baseline."""
 
     def __init__(
         self, model: nn.Module, inner_lr: float = 0.01,
@@ -234,11 +228,7 @@ class FairFedAvg:
 
 
 class AgnosticFairFL:
-    """Agnostic Fair FL — reweights clients based on worst-performing group.
-
-    Inspired by Mohri et al. (2019) agnostic federated learning.
-    Adjusts client weights proportionally to worst-group loss.
-    """
+    """Reweight clients according to their worst-performing group."""
 
     def __init__(
         self, model: nn.Module, lr: float = 0.01,

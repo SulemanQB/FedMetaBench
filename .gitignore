@@ -24,3 +24,4 @@ results_fixed.txt
 **/results/live_*.log
 **/results/fullrun_*.log
 **/results/*_error.txt
+analysis.md

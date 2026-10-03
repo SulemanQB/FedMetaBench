@@ -1,4 +1,4 @@
-"""Drift detection for FedMeta-Temporal+.
+"""Drift detection for FedMetaTemporal.
 
 Implements:
 - Page-Hinkley (PH) test for drift detection
@@ -106,7 +106,7 @@ class SlidingWindowDetector:
 class ClientDriftMonitor:
     """Monitors drift across multiple federated clients.
 
-    Tracks per-client drift status and triggers re-adaptation.
+    Tracks per-client drift status and records drift events.
     """
 
     def __init__(
