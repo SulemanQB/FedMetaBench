@@ -1,6 +1,6 @@
 # FedMetaBench scope
 
-## In this repo (GitHub / industry portfolio)
+## In this repo
 
 Four applied federated meta-learning demos:
 
